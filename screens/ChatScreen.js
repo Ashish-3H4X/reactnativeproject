@@ -12,44 +12,42 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function ChatScreen({ navigation }) {
 
-  const [chats, setChats] = useState([
+  const baseChats = [
     { id:'1', name:'Rahul' },
     { id:'2', name:'Arvii' },
     { id:'3', name:'Neha' },
-  ]);
+  ];
+
+  const [chats, setChats] = useState(baseChats);
 
   const loadChats = async () => {
+
     const updated = await Promise.all(
-      chats.map(async (chat) => {
+      baseChats.map(async (chat) => {
 
-        const saved = await AsyncStorage.getItem(`chat_${chat.name}`);
-        const unread = await AsyncStorage.getItem(`unread_${chat.name}`);
-        const typing = await AsyncStorage.getItem(`typing_${chat.name}`);
+        try {
+          const res = await fetch(
+            `http://10.205.189.221:5000/api/messages/me/${chat.name}`
+          );
+          const messages = await res.json();
 
-        if (saved) {
-          const messages = JSON.parse(saved);
           const last = messages[messages.length - 1];
+
+          const unread = await AsyncStorage.getItem(`unread_${chat.name}`);
 
           return {
             ...chat,
-            message: last?.text,
-            time: last?.time,
-            unread: unread ? parseInt(unread) : 0,
-            status: last?.status || 'sent',
-            sender: last?.sender || 'other',
-            typing: typing === 'true'
+            message: last?.text || '',
+            time: last?.time || '',
+            sender: last?.sender || '',
+            status: last?.status || 'read',
+            unread: unread ? parseInt(unread) : 0
           };
-        }
 
-        return {
-          ...chat,
-          message: 'Start chatting',
-          time: '',
-          unread: 0,
-          status: 'sent',
-          sender: 'other',
-          typing: false
-        };
+        } catch (err) {
+          console.log(err);
+          return chat;
+        }
       })
     );
 
@@ -75,7 +73,10 @@ export default function ChatScreen({ navigation }) {
         renderItem={({item}) => (
 
           <TouchableOpacity
-            onPress={()=>navigation.navigate('ChatDetail',{name:item.name})}
+            onPress={async () => {
+              await AsyncStorage.setItem(`unread_${item.name}`, '0');
+              navigation.navigate('ChatDetail', { name:item.name });
+            }}
             style={{
               flexDirection:'row',
               paddingVertical:12,
@@ -86,19 +87,22 @@ export default function ChatScreen({ navigation }) {
             }}
           >
 
+            {/* Avatar */}
             <Image
               source={{uri:'https://i.pravatar.cc/100'}}
               style={{width:50,height:50,borderRadius:25}}
             />
 
+            {/* Content */}
             <View style={{flex:1, marginLeft:12}}>
 
+              {/* Name + Time */}
               <View style={{
                 flexDirection:'row',
                 justifyContent:'space-between'
               }}>
                 <Text style={{
-                  fontWeight: item.unread > 0 ? 'bold' : '600',
+                  fontWeight: item.unread>0 ? 'bold' : '600',
                   fontSize:16
                 }}>
                   {item.name}
@@ -112,6 +116,7 @@ export default function ChatScreen({ navigation }) {
                 </Text>
               </View>
 
+              {/* Message Row */}
               <View style={{
                 flexDirection:'row',
                 justifyContent:'space-between',
@@ -119,9 +124,14 @@ export default function ChatScreen({ navigation }) {
                 alignItems:'center'
               }}>
 
-                <View style={{flexDirection:'row', alignItems:'center', flex:1}}>
+                <View style={{
+                  flexDirection:'row',
+                  alignItems:'center',
+                  flex:1
+                }}>
 
-                  {item.sender === 'me' && item.unread === 0 && (
+                  {/* ✔✔ only for MY message */}
+                  {item.sender === 'me' && (
                     <Ionicons
                       name="checkmark-done"
                       size={16}
@@ -133,22 +143,17 @@ export default function ChatScreen({ navigation }) {
                   <Text
                     numberOfLines={1}
                     style={{
-                      color: item.typing
-                        ? '#25D366'
-                        : (item.unread > 0 ? '#000' : '#666'),
-                      fontWeight: item.typing
-                        ? 'bold'
-                        : (item.unread > 0 ? 'bold' : 'normal'),
+                      color: item.unread>0 ? '#000' : '#666',
+                      fontWeight: item.unread>0 ? 'bold' : 'normal',
                       flex:1
                     }}
                   >
-                    {item.typing
-                      ? 'typing...'
-                      : (item.message || 'Start chatting')}
+                    {item.message || 'Start chatting'}
                   </Text>
 
                 </View>
 
+                {/* 🔴 Unread badge */}
                 {item.unread > 0 && (
                   <View style={{
                     backgroundColor:'#25D366',
